@@ -1,0 +1,24 @@
+# DEMO CANDIDATE RESUME
+
+**Name:** Jane Doe  
+**Target Role:** Backend Engineer  
+**Email:** jane.doe@example.com  
+
+## Professional Summary
+Passionate Backend Software Engineer with 2+ years of experience designing scalable microservices, building high-performance REST APIs, and tuning SQL query performance. Experienced with Python, FastAPI, PostgreSQL, Docker, and Redis caching.
+
+## Technical Skills
+- **Languages:** Python, SQL, JavaScript/TypeScript
+- **Frameworks:** FastAPI, Flask, SQLAlchemy
+- **Databases:** PostgreSQL, SQLite, Redis
+- **DevOps & Tools:** Docker, Git, Linux, PyTest
+
+## Experience
+
+### Backend Software Engineer | TechCorp (2022 - Present)
+- Designed and implemented RESTful API microservices in FastAPI and Python handling over 500,000 daily requests.
+- Optimized database query performance and configured composite B-Tree indexes in PostgreSQL, reducing P99 latency by 35%.
+- Implemented Cache-Aside pattern using Redis, reducing database load during high-traffic peaks.
+
+## Education
+- B.S. in Computer Science & Engineering (2022)

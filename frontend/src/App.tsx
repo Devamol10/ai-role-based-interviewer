@@ -383,6 +383,28 @@ function App() {
         )}
 
         {/* State 4: Final Results Screen */}
+        {isCompleted && !isLoadingReport && !report && errorMessage && (
+          <div className="bg-white rounded-xl border border-rose-200 shadow-sm p-10 text-center flex flex-col items-center gap-4">
+            <div className="text-rose-500 text-4xl">⚠</div>
+            <h3 className="text-lg font-bold text-slate-900">Report Could Not Be Generated</h3>
+            <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3 max-w-lg">{errorMessage}</p>
+            <button
+              onClick={() => {
+                setIsCompleted(false);
+                setCurrentQuestion(null);
+                setSelectedFile(null);
+                setAnswerInput('');
+                setErrorMessage(null);
+                setReport(null);
+              }}
+              className="mt-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition"
+            >
+              Start New Interview
+            </button>
+          </div>
+        )}
+
+        {/* State 5: Final Results Screen */}
         {isCompleted && !isLoadingReport && report && (
           <div className="flex flex-col gap-6">
             {/* Overall Score Header Card */}

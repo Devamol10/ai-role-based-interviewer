@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Float, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -13,7 +13,7 @@ class InterviewAnswer(Base):
     answer_text: Mapped[str] = mapped_column(String, nullable=False)
     score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     feedback: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     question: Mapped["InterviewQuestion"] = relationship("InterviewQuestion", back_populates="answer")

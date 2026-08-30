@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import Float, String, JSON, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -14,7 +14,7 @@ class InterviewReport(Base):
     strengths: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     weaknesses: Mapped[Optional[list]] = mapped_column(JSON, default=list)
     summary: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     session: Mapped["InterviewSession"] = relationship("InterviewSession", back_populates="report")

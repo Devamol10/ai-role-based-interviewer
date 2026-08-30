@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -91,7 +91,7 @@ def process_candidate_answer(
     # 6. Check if interview is completed (Question 5 answered)
     if current_q_num >= TOTAL_INTERVIEW_QUESTIONS:
         session.status = "completed"
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(session)
 
