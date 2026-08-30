@@ -1,0 +1,42 @@
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+}
+
+export interface ResumeUploadResult {
+  candidate_id: number;
+  filename: string;
+  selected_role: string;
+  extracted_text_length: number;
+  message: string;
+}
+
+export async function checkHealth(): Promise<HealthResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/health`);
+  if (!response.ok) {
+    throw new Error(`Health check failed with status: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function uploadResume(file: File, role: string): Promise<ResumeUploadResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('role', role);
+
+  const response = await fetch(`${API_BASE_URL}/api/resume/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to upload resume.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+
+  return data as ResumeUploadResult;
+}

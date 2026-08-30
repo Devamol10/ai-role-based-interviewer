@@ -108,10 +108,33 @@ The frontend application will be accessible at: `http://localhost:5173`
 - [x] Base project repository structure initialized.
 - [x] FastAPI modular app setup with CORS middleware and global exception handling.
 - [x] SQLite database connection & SQLAlchemy 2.x models setup.
-- [x] Pydantic v2 validation schemas created.
-- [x] Automated backend tests (`pytest`) covering health check and DB initialization.
-- [x] `GET /api/health` endpoint implemented and verified.
-- [x] React + Vite + TypeScript frontend landing page created with backend health connection indicator.
+- [x] Resume PDF upload & PyMuPDF text extraction service implemented.
+- [x] `POST /api/resume/upload` endpoint implemented with PDF/role validation and Candidate DB persistence.
+- [x] React + Vite + TypeScript frontend upload interface with role selection and upload feedback.
+- [x] Automated backend tests (`pytest`) covering health check, DB initialization, and resume upload edge cases.
+
+## Resume Upload Feature
+
+### Supported Roles
+- `Backend Engineer`
+- `AI/ML Engineer`
+- `Data Science / Applied ML`
+
+### PDF Extraction Technology
+Uses **PyMuPDF** (`pymupdf`) to extract clean page-by-page text from uploaded PDF resumes without external binary dependencies.
+
+### API Endpoint: `POST /api/resume/upload`
+- **Request**: `multipart/form-data` containing `file` (PDF, max 5 MB) and `role`.
+- **Response**:
+  ```json
+  {
+    "candidate_id": 1,
+    "filename": "resume.pdf",
+    "selected_role": "Backend Engineer",
+    "extracted_text_length": 1420,
+    "message": "Resume uploaded and text extracted successfully."
+  }
+  ```
 
 ## Planned Upcoming Modules
 
