@@ -136,6 +136,68 @@ Uses **PyMuPDF** (`pymupdf`) to extract clean page-by-page text from uploaded PD
   }
   ```
 
+## RAG Architecture
+
+The Knowledge Base Retrieval-Augmented Generation (RAG) module enables context-aware search over domain technical documentation:
+
+```text
+Resume + Role Selection
+         │
+         ▼
+Target Role Mapping (e.g. Backend Engineer -> backend_engineer)
+         │
+         ▼
+Query / Topic Construction ──► Embeddings (text-embedding-3-small)
+                                      │
+                                      ▼
+Knowledge Base (.md/.txt) ──► ChromaDB Vector Store (Cosine Similarity)
+                                      │
+                                      ▼
+                        Top-K Context Chunks Returned
+```
+
+### Why ChromaDB & Embeddings?
+- **ChromaDB**: High-performance persistent vector database that stores chunk text, dense float vector embeddings, and chunk metadata locally (`./chroma_db`).
+- **OpenAI Embeddings**: Converts query text and document chunks into dense 1536-dimensional vector representations using `text-embedding-3-small`.
+
+### Chunking Strategy & Role Filtering
+- **Paragraph-Aware Chunking**: Chunks document text into ~900 character windows with a 150-character overlap while preserving paragraph boundaries (`app/rag/chunker.py`).
+- **Metadata**: Each chunk stores `source` filename, `role` tag, and deterministic `chunk_index`.
+- **Role Filtering**: Vector queries filter ChromaDB collections by the candidate's target role (`backend_engineer`, `ai_ml_engineer`, `data_science`) to prevent cross-domain noise.
+
+### Ingestion Script
+To populate ChromaDB with the reference technical documents:
+```bash
+cd backend
+python scripts/ingest_knowledge_base.py
+```
+
+### RAG Search API: `POST /api/rag/search`
+- **Request Body**:
+  ```json
+  {
+    "query": "How do B-Trees optimize indexing performance?",
+    "role": "Backend Engineer",
+    "top_k": 5
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "query": "How do B-Trees optimize indexing performance?",
+    "role": "Backend Engineer",
+    "result_count": 1,
+    "results": [
+      {
+        "text": "Database indexing utilizes B-Trees and Hash Indexes to accelerate lookup queries...",
+        "source": "databases.md",
+        "role": "backend_engineer",
+        "chunk_index": 0
+      }
+    ]
+  }
+  ```
+
 ## Planned Upcoming Modules
 
 1. **Resume Ingestion & Parsing**: Extract text & structure from candidate PDF resumes (PyMuPDF).

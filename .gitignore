@@ -44,6 +44,9 @@ dist-ssr/
 *.db
 *.sqlite
 *.sqlite3
+chroma_db/
+chroma_db*
+
 
 # Environment variables
 .env
