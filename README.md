@@ -2,20 +2,30 @@
 
 AI Role-Based Interviewer is an intelligent technical interview platform designed to conduct role-based technical interviews for engineering candidates using candidate resumes and domain knowledge bases.
 
-## Current Architecture Overview
+## Architecture Overview
 
 The system follows a decoupled client-server architecture:
-- **Frontend**: Single-page application built with React, Vite, TypeScript, and Tailwind CSS.
-- **Backend**: RESTful API service built with FastAPI, Uvicorn, and Pydantic.
-- **Database**: SQLite (configured for initial local persistence).
+- **Frontend**: Single-page application built with React 19, Vite, TypeScript, and Tailwind CSS.
+- **Backend**: RESTful API service built with FastAPI, Uvicorn, SQLAlchemy 2.x ORM, and Pydantic v2.
+- **Database**: SQLite (managed with SQLAlchemy ORM).
 - **Knowledge Base & RAG**: Dedicated folder directory and module layout structured for vector embeddings and document processing.
 
 ## Tech Stack
 
 - **Frontend**: React 19, Vite, TypeScript, Tailwind CSS
-- **Backend**: Python 3.11+, FastAPI, Uvicorn, Pydantic v2
-- **Database**: SQLite (SQLAlchemy / direct DB connection ready)
+- **Backend**: Python 3.11+, FastAPI, Uvicorn, SQLAlchemy 2.0+, Pydantic v2
+- **Testing**: pytest, httpx
+- **Database**: SQLite (`interviewer.db`)
 - **Containerization**: Docker & Docker Compose
+
+## Database Entities
+
+The SQLite database (`interviewer.db`) includes the following 5 ORM models:
+1. **Candidate** (`candidates`): Stores candidate background info, resume text, target role, and extracted skills/technologies.
+2. **InterviewSession** (`interview_sessions`): Tracks interview session status (`created`, `in_progress`, `completed`), progress counters, and candidate relationship.
+3. **InterviewQuestion** (`interview_questions`): Contains individual questions generated per session, question numbers, topics, difficulties, and RAG context.
+4. **InterviewAnswer** (`interview_answers`): Holds candidate responses, evaluation scores, and feedback per question.
+5. **InterviewReport** (`interview_reports`): Stores overall candidate session scores, strengths, weaknesses, and performance summaries.
 
 ## Project Structure
 
@@ -26,17 +36,19 @@ ai-role-based-interviewer/
 │
 ├── backend/              # FastAPI application
 │   └── app/
-│       ├── api/          # API route endpoints
-│       ├── core/         # Settings & app configurations
-│       ├── models/       # Database models
-│       ├── schemas/      # Pydantic schemas
-│       ├── services/     # Core business logic
-│       ├── rag/          # Vector search & RAG pipeline
-│       ├── utils/        # Helper functions
-│       └── main.py       # FastAPI application entrypoint
+│       ├── api/          # API route definitions and router
+│       │   ├── routes/   # Modular route handlers (e.g. health.py)
+│       │   └── router.py # Central API router aggregator
+│       ├── core/         # Settings & SQLite DB engine configuration
+│       ├── models/       # SQLAlchemy 2.x ORM database models
+│       ├── schemas/      # Pydantic v2 request & response schemas
+│       ├── services/     # Core business logic (reserved)
+│       ├── rag/          # Vector search & RAG pipeline (reserved)
+│       ├── utils/        # Helper functions (reserved)
+│       └── main.py       # FastAPI application entrypoint with lifespan DB init
 │
 ├── knowledge_base/       # Storage for role knowledge documents
-├── tests/                # Test suite
+├── tests/                # Pytest test suite (backend & DB tests)
 │
 ├── .gitignore
 ├── .env.example
@@ -72,7 +84,14 @@ uvicorn app.main:app --reload --port 8000
 ```
 The backend health check will be accessible at: `http://localhost:8000/api/health`
 
-### 3. Frontend Setup & Run Command
+### 3. Running Backend Tests
+
+Navigate to the `backend/` folder with virtual environment active:
+```bash
+pytest ../tests
+```
+
+### 4. Frontend Setup & Run Command
 
 Navigate to the `frontend/` folder:
 ```bash
@@ -85,10 +104,12 @@ The frontend application will be accessible at: `http://localhost:5173`
 ## Current Project Status
 
 - [x] Base project repository structure initialized.
-- [x] FastAPI modular app setup with CORS middleware.
+- [x] FastAPI modular app setup with CORS middleware and global exception handling.
+- [x] SQLite database connection & SQLAlchemy 2.x models setup.
+- [x] Pydantic v2 validation schemas created.
+- [x] Automated backend tests (`pytest`) covering health check and DB initialization.
 - [x] `GET /api/health` endpoint implemented and verified.
 - [x] React + Vite + TypeScript frontend landing page created with backend health connection indicator.
-- [x] Configuration files (`.env.example`, `.gitignore`, `docker-compose.yml`) established.
 
 ## Planned Upcoming Modules
 
