@@ -4,7 +4,10 @@ import {
   uploadResume, 
   generateInterviewQuestion, 
   submitAnswer,
-  type GeneratedQuestionResult 
+  getInterviewReport,
+  getInterviewQuestions,
+  type GeneratedQuestionResult,
+  type InterviewReportResult
 } from './services/api';
 
 const SUPPORTED_ROLES = [
@@ -25,12 +28,17 @@ function App() {
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState<boolean>(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
+  const [isLoadingReport, setIsLoadingReport] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Interactive Interview State
   const [currentQuestion, setCurrentQuestion] = useState<GeneratedQuestionResult | null>(null);
   const [answerInput, setAnswerInput] = useState<string>('');
+  
+  // Results State
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [report, setReport] = useState<InterviewReportResult | null>(null);
+  const [questionBreakdown, setQuestionBreakdown] = useState<any[]>([]);
 
   const fetchHealth = async () => {
     setHealthStatus('checking');
@@ -76,6 +84,7 @@ function App() {
     setErrorMessage(null);
     setCurrentQuestion(null);
     setIsCompleted(false);
+    setReport(null);
 
     try {
       // Step 1: Upload Resume & Create Candidate
@@ -94,6 +103,23 @@ function App() {
     }
   };
 
+  const loadFinalReport = async (sessionId: number) => {
+    setIsLoadingReport(true);
+    try {
+      const reportRes = await getInterviewReport(sessionId);
+      setReport(reportRes);
+
+      const qsRes = await getInterviewQuestions(sessionId);
+      if (qsRes && qsRes.questions) {
+        setQuestionBreakdown(qsRes.questions);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to generate interview report.');
+    } finally {
+      setIsLoadingReport(false);
+    }
+  };
+
   const handleAnswerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentQuestion) return;
@@ -101,10 +127,6 @@ function App() {
     const trimmedAnswer = answerInput.trim();
     if (!trimmedAnswer) {
       setErrorMessage('Please enter a substantive answer before submitting.');
-      return;
-    }
-    if (trimmedAnswer.length < 5) {
-      setErrorMessage('Your answer is too short. Please elaborate slightly.');
       return;
     }
 
@@ -123,6 +145,7 @@ function App() {
       if (result.interview_completed) {
         setIsCompleted(true);
         setCurrentQuestion(null);
+        await loadFinalReport(result.session_id);
       } else if (result.next_question) {
         setCurrentQuestion(result.next_question);
       }
@@ -170,7 +193,6 @@ function App() {
         {/* State 1: Upload & Initial Setup */}
         {!currentQuestion && !isCompleted && (
           <>
-            {/* Intro */}
             <section className="text-center max-w-2xl mx-auto mt-2">
               <h2 className="text-3xl font-extrabold text-slate-900 mb-3 sm:text-4xl">
                 Personalized Technical Interview
@@ -180,10 +202,8 @@ function App() {
               </p>
             </section>
 
-            {/* Form Container */}
             <form onSubmit={handleStartInterview} className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 1. Resume Upload */}
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center font-bold">1</span>
@@ -206,7 +226,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* 2. Role Selection */}
                 <div className="flex flex-col">
                   <label className="text-sm font-semibold text-slate-900 mb-2 flex items-center gap-2">
                     <span className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 text-xs flex items-center justify-center font-bold">2</span>
@@ -229,14 +248,12 @@ function App() {
                 </div>
               </div>
 
-              {/* Error Message */}
               {errorMessage && (
                 <div className="bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg p-4 flex items-center gap-2">
                   <span className="font-semibold">Error:</span> {errorMessage}
                 </div>
               )}
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={isUploading || isGeneratingQuestion || !selectedFile}
@@ -295,7 +312,6 @@ function App() {
               )}
             </div>
 
-            {/* Answer Textarea */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
                 Your Answer
@@ -310,14 +326,12 @@ function App() {
               />
             </div>
 
-            {/* Error Banner */}
             {errorMessage && (
               <div className="bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg p-4 flex items-center gap-2">
                 <span className="font-semibold">Error:</span> {errorMessage}
               </div>
             )}
 
-            {/* Submit Answer Controls */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
                 type="button"
@@ -346,39 +360,143 @@ function App() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Saving & Generating Next Question...
+                    Evaluating Answer & Generating Next Step...
                   </>
                 ) : (
-                  'Submit Answer & Next Question \u2192'
+                  'Submit Answer \u2192'
                 )}
               </button>
             </div>
           </form>
         )}
 
-        {/* State 3: Completion Screen */}
-        {isCompleted && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center flex flex-col items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-2xl mb-2">
-              ✓
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900">
-              Interview Completed
-            </h2>
-            <p className="text-slate-600 text-sm max-w-md">
-              Thank you for completing the technical evaluation. All 5 questions have been answered and recorded.
-            </p>
-            <div className="bg-slate-50 border border-slate-200 rounded-lg py-3 px-6 text-xs font-medium text-slate-700">
-              Questions Answered: <strong className="text-slate-900">5 / 5</strong>
+        {/* State 3: Loading Report State */}
+        {isCompleted && isLoadingReport && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center flex flex-col items-center justify-center gap-4">
+            <svg className="animate-spin h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <h3 className="text-lg font-bold text-slate-900">Evaluating Final Answer & Generating Report...</h3>
+            <p className="text-xs text-slate-500">Aggregating scores, strengths, weaknesses, and executive recommendation.</p>
+          </div>
+        )}
+
+        {/* State 4: Final Results Screen */}
+        {isCompleted && !isLoadingReport && report && (
+          <div className="flex flex-col gap-6">
+            {/* Overall Score Header Card */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex flex-col gap-1 text-center md:text-left">
+                <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">Interview Completed</span>
+                <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900">{selectedRole}</h2>
+                <p className="text-xs text-slate-500">Evaluated across 5 RAG-grounded technical questions</p>
+              </div>
+
+              <div className="flex items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div className="text-center">
+                  <span className="text-xs font-semibold text-slate-500 block uppercase">Overall Score</span>
+                  <span className="text-3xl font-black text-indigo-600">{report.overall_score} <span className="text-sm font-normal text-slate-400">/ 10</span></span>
+                </div>
+                <div className="h-10 w-px bg-slate-200" />
+                <div className="text-center">
+                  <span className="text-xs font-semibold text-slate-500 block uppercase">Recommendation</span>
+                  <span className={`text-sm font-bold px-3 py-1 rounded-full inline-block mt-1 ${
+                    report.recommendation === 'Strong Candidate' ? 'bg-emerald-100 text-emerald-800' :
+                    report.recommendation === 'Good Candidate' ? 'bg-indigo-100 text-indigo-800' :
+                    report.recommendation === 'Needs Improvement' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {report.recommendation}
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex gap-4 mt-4">
-              <button
-                disabled
-                className="px-6 py-2.5 bg-slate-200 text-slate-500 font-medium rounded-lg text-sm cursor-not-allowed"
-              >
-                View Results (Evaluation coming next)
-              </button>
+            {/* Strengths & Areas to Improve Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2 text-emerald-600">
+                  <span>✓</span> Key Strengths
+                </h3>
+                <ul className="space-y-2">
+                  {report.strengths.map((str, idx) => (
+                    <li key={idx} className="text-xs text-slate-700 bg-emerald-50/50 border border-emerald-100 p-2.5 rounded-lg flex items-start gap-2">
+                      <span className="text-emerald-500 font-bold">•</span>
+                      <span>{str}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2 text-amber-600">
+                  <span>•</span> Areas to Improve
+                </h3>
+                <ul className="space-y-2">
+                  {report.weaknesses.map((wk, idx) => (
+                    <li key={idx} className="text-xs text-slate-700 bg-amber-50/50 border border-amber-100 p-2.5 rounded-lg flex items-start gap-2">
+                      <span className="text-amber-500 font-bold">•</span>
+                      <span>{wk}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {/* Executive Summary Card */}
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Executive Summary</h3>
+              <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-200">
+                {report.summary}
+              </p>
+            </div>
+
+            {/* Question Breakdown List */}
+            <div className="bg-white p-6 md:p-8 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
+              <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Per-Question Evaluation Breakdown</h3>
+              <div className="space-y-4">
+                {questionBreakdown.map((q, idx) => (
+                  <details key={q.id || idx} className="group bg-slate-50 border border-slate-200 rounded-lg p-4 transition">
+                    <summary className="flex items-center justify-between cursor-pointer list-none">
+                      <div className="flex items-center space-x-3">
+                        <span className="w-6 h-6 rounded-full bg-slate-200 text-slate-700 text-xs flex items-center justify-center font-bold">
+                          {q.question_number}
+                        </span>
+                        <span className="text-sm font-semibold text-slate-900">{q.topic}</span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-xs font-bold px-2.5 py-1 rounded bg-indigo-100 text-indigo-800">
+                          {q.score !== null ? `${q.score} / 10` : 'Evaluated'}
+                        </span>
+                        <span className="text-xs text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+                      </div>
+                    </summary>
+
+                    <div className="mt-4 pt-4 border-t border-slate-200 space-y-3 text-xs">
+                      <div>
+                        <span className="font-semibold text-slate-500 block mb-1">Question:</span>
+                        <p className="text-slate-900 font-medium">{q.question_text}</p>
+                      </div>
+                      {q.answer_text && (
+                        <div>
+                          <span className="font-semibold text-slate-500 block mb-1">Your Answer:</span>
+                          <p className="text-slate-800 bg-white p-3 rounded border border-slate-200 whitespace-pre-wrap">{q.answer_text}</p>
+                        </div>
+                      )}
+                      {q.feedback && (
+                        <div>
+                          <span className="font-semibold text-slate-500 block mb-1">AI Feedback:</span>
+                          <p className="text-indigo-900 bg-indigo-50/60 p-3 rounded border border-indigo-100">{q.feedback}</p>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="flex justify-center pt-2">
               <button
                 onClick={() => {
                   setIsCompleted(false);
@@ -386,8 +504,9 @@ function App() {
                   setSelectedFile(null);
                   setAnswerInput('');
                   setErrorMessage(null);
+                  setReport(null);
                 }}
-                className="px-6 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium rounded-lg text-sm transition"
+                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition shadow-sm"
               >
                 Start New Interview
               </button>
@@ -398,7 +517,7 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-400">
-        AI Role-Based Interviewer &bull; Step 5 Interactive 5-Question Interview
+        AI Role-Based Interviewer &bull; Complete Evaluation & Final Report Flow
       </footer>
     </div>
   );

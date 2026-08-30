@@ -89,7 +89,10 @@ def get_interview_questions(
             "question_text": q.question_text,
             "topic": q.topic,
             "difficulty": q.difficulty,
-            "answer_submitted": ans is not None
+            "answer_submitted": ans is not None,
+            "answer_text": ans.answer_text if ans else None,
+            "score": ans.score if ans else None,
+            "feedback": ans.feedback if ans else None
         })
 
     return {

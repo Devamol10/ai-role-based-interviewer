@@ -10,6 +10,7 @@ from app.models.question import InterviewQuestion
 from app.models.answer import InterviewAnswer
 from app.services.topic_service import select_interview_topics
 from app.services.question_generation_service import generate_interview_question
+from app.services.answer_evaluation_service import evaluate_answer
 
 TOTAL_INTERVIEW_QUESTIONS = 5
 
@@ -55,10 +56,31 @@ def process_candidate_answer(
             detail=f"An answer for question {question.question_number} has already been submitted."
         )
 
-    # 3. Save InterviewAnswer in SQLite
+    candidate = db.query(Candidate).filter(Candidate.id == session.candidate_id).first()
+
+    # 3. Retrieve RAG grounding context stored with question
+    retrieved_ctx = []
+    if question.retrieved_context:
+        try:
+            retrieved_ctx = json.loads(question.retrieved_context)
+        except Exception:
+            retrieved_ctx = []
+
+    # 4. Perform AI Answer Evaluation
+    eval_result = evaluate_answer(
+        question_text=question.question_text,
+        answer_text=answer_text,
+        role=candidate.selected_role,
+        topic=question.topic or "Technical",
+        retrieved_context=retrieved_ctx
+    )
+
+    # 5. Persist InterviewAnswer with score and feedback in SQLite
     new_answer = InterviewAnswer(
         question_id=question.id,
-        answer_text=answer_text.strip()
+        answer_text=answer_text.strip(),
+        score=eval_result.get("score"),
+        feedback=eval_result.get("feedback")
     )
     db.add(new_answer)
     db.commit()
@@ -66,7 +88,7 @@ def process_candidate_answer(
 
     current_q_num = session.current_question_number
 
-    # 4. Check if interview is completed (Question 5 answered)
+    # 6. Check if interview is completed (Question 5 answered)
     if current_q_num >= TOTAL_INTERVIEW_QUESTIONS:
         session.status = "completed"
         session.completed_at = datetime.utcnow()
@@ -74,7 +96,7 @@ def process_candidate_answer(
         db.refresh(session)
 
         return {
-            "message": "Answer saved successfully. Interview completed!",
+            "message": "Answer evaluated and recorded. Interview completed!",
             "session_id": session.id,
             "question_id": question.id,
             "next_question_number": None,
@@ -82,11 +104,10 @@ def process_candidate_answer(
             "next_question": None
         }
 
-    # 5. Advance to next question (Question 2 to 5)
+    # 7. Advance to next question (Question 2 to 5)
     next_q_num = current_q_num + 1
     session.current_question_number = next_q_num
 
-    candidate = db.query(Candidate).filter(Candidate.id == session.candidate_id).first()
     candidate_profile = {
         "skills": candidate.extracted_skills or [],
         "technologies": candidate.extracted_technologies or [],
@@ -141,7 +162,7 @@ def process_candidate_answer(
     db.refresh(next_db_question)
 
     return {
-        "message": "Answer saved successfully.",
+        "message": "Answer evaluated and recorded successfully.",
         "session_id": session.id,
         "question_id": question.id,
         "next_question_number": next_q_num,

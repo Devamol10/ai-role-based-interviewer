@@ -249,11 +249,65 @@ Question 5 Answered ──► Session Marked Completed (completed_at set) ──
 ```
 
 ### Endpoints
-1. `POST /api/interview/{session_id}/answer`: Validates answer length, prevents duplicate submissions per question, persists `InterviewAnswer` in SQLite, advances `current_question_number`, retrieves RAG context, and returns the next question. Upon answering Question 5, sets `interview_completed: true` and marks session `completed`.
+1. `POST /api/interview/{session_id}/answer`: Validates answer length, evaluates candidate answer (0-10 rubric), persists `score` and `feedback` on `InterviewAnswer`, advances `current_question_number`, retrieves RAG context, and returns the next question. Upon answering Question 5, sets `interview_completed: true` and marks session `completed`.
 2. `GET /api/interview/{session_id}`: Returns current session status, question number, active question text, and submission status for session recovery.
-3. `GET /api/interview/{session_id}/questions`: Returns structured history of all generated questions in sequence.
+3. `GET /api/interview/{session_id}/questions`: Returns structured history of all generated questions in sequence with score and feedback metadata.
+4. `GET /api/interview/{session_id}/report`: Generates and retrieves the final candidate evaluation report once the 5-question interview is completed.
 
-## Planned Upcoming Modules
+## Answer Evaluation & Final Candidate Report
+
+```text
+Candidate Answer
+       │
+       ▼
+AI Answer Evaluation (app/services/answer_evaluation_service.py)
+  - Evaluates answer against rubric (0-10) grounded in RAG context
+  - Generates numerical score & feedback
+       │
+       ▼
+SQLite Persistence (InterviewAnswer.score & InterviewAnswer.feedback)
+       │
+       ▼
+Final Report Generation (app/services/report_service.py)
+  - Calculates deterministic overall score (Python average)
+  - Maps score to hiring recommendation threshold
+  - Generates executive qualitative summary (OpenAI gpt-4o-mini)
+  - Persists InterviewReport in SQLite
+```
+
+### Evaluation Rubric (0–10 Scale)
+- **0–2**: Incorrect or largely irrelevant.
+- **3–4**: Limited understanding with significant technical gaps.
+- **5–6**: Basic understanding with meaningful gaps or missing details.
+- **7–8**: Good understanding with minor gaps or slight trade-off oversights.
+- **9–10**: Strong, comprehensive, and technically accurate answer.
+
+### Deterministic Recommendation Logic
+- **8.5 – 10.0**: `Strong Candidate`
+- **7.0 – 8.49**: `Good Candidate`
+- **5.0 – 6.99**: `Needs Improvement`
+- **0.0 – 4.99**: `Significant Gaps`
+
+### Report API Endpoint: `GET /api/interview/{session_id}/report`
+- **Response**:
+  ```json
+  {
+    "session_id": 1,
+    "overall_score": 7.8,
+    "recommendation": "Good Candidate",
+    "strengths": [
+      "Strong understanding of Database Performance",
+      "Good understanding of Caching Strategies"
+    ],
+    "weaknesses": [
+      "Gaps identified in Scalability & Architecture"
+    ],
+    "summary": "The candidate demonstrated good engineering knowledge across database indexing and caching patterns, with minor trade-off oversights in high-concurrency scalability.",
+    "question_count": 5
+  }
+  ```
+
+## Completed Project Modules
 
 1. **Resume Ingestion & Parsing**: Extract text & structure from candidate PDF resumes (PyMuPDF).
 2. **Knowledge Base RAG Engine**: Index documents into ChromaDB vector store and retrieve relevant domain context based on target roles.

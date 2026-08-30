@@ -57,12 +57,32 @@ export interface InterviewSessionState {
   answer_submitted: boolean;
 }
 
+export interface InterviewReportResult {
+  session_id: number;
+  overall_score: number;
+  recommendation: string;
+  strengths: string[];
+  weaknesses: string[];
+  summary: string;
+  question_count: number;
+}
+
 export async function checkHealth(): Promise<HealthResponse> {
   const response = await fetch(`${API_BASE_URL}/api/health`);
   if (!response.ok) {
     throw new Error(`Health check failed with status: ${response.status}`);
   }
   return response.json();
+}
+
+export async function getInterviewReport(sessionId: number): Promise<InterviewReportResult> {
+  const response = await fetch(`${API_BASE_URL}/api/interview/${sessionId}/report`);
+  const data = await response.json();
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to fetch interview report.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+  return data as InterviewReportResult;
 }
 
 export async function generateInterviewQuestion(candidateId: number, topic?: string): Promise<GeneratedQuestionResult> {
