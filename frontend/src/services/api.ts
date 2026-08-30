@@ -34,8 +34,27 @@ export interface GeneratedQuestionResult {
   question_text: string;
   topic: string;
   difficulty: string;
-  reason: string;
+  reason?: string;
   retrieved_context: RAGChunkResult[];
+}
+
+export interface AnswerSubmitResult {
+  message: string;
+  session_id: number;
+  question_id: number;
+  next_question_number: number | null;
+  interview_completed: boolean;
+  next_question?: GeneratedQuestionResult | null;
+}
+
+export interface InterviewSessionState {
+  session_id: number;
+  candidate_id: number;
+  status: string;
+  current_question_number: number;
+  total_questions: number;
+  current_question: GeneratedQuestionResult | null;
+  answer_submitted: boolean;
 }
 
 export async function checkHealth(): Promise<HealthResponse> {
@@ -58,6 +77,40 @@ export async function generateInterviewQuestion(candidateId: number, topic?: str
     throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
   }
   return data as GeneratedQuestionResult;
+}
+
+export async function submitAnswer(sessionId: number, questionId: number, answerText: string): Promise<AnswerSubmitResult> {
+  const response = await fetch(`${API_BASE_URL}/api/interview/${sessionId}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question_id: questionId, answer_text: answerText }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to submit answer.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+  return data as AnswerSubmitResult;
+}
+
+export async function getInterview(sessionId: number): Promise<InterviewSessionState> {
+  const response = await fetch(`${API_BASE_URL}/api/interview/${sessionId}`);
+  const data = await response.json();
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to fetch interview session.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+  return data as InterviewSessionState;
+}
+
+export async function getInterviewQuestions(sessionId: number): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/api/interview/${sessionId}/questions`);
+  const data = await response.json();
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to fetch interview questions.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+  return data;
 }
 
 export async function searchRAG(query: string, role: string, topK: number = 5): Promise<RAGSearchResponse> {

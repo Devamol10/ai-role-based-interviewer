@@ -226,28 +226,32 @@ SQLite Persistence (InterviewSession & InterviewQuestion)
 - **Topic Selection**: Selects 3-5 relevant interview topics grounded in candidate skills and role demands.
 - **RAG Grounding**: Combines role, candidate skills, and topic into vector queries to retrieve up to 3 domain-specific chunks from ChromaDB.
 - **Question Generation**: OpenAI `gpt-4o-mini` crafts structured single questions tailored to candidate background and grounded in retrieved context.
-- **API Endpoint (`POST /api/interview/questions/generate`)**:
-  - Request: `{"candidate_id": 1, "topic": "Database Performance"}`
-  - Response:
-    ```json
-    {
-      "id": 1,
-      "session_id": 1,
-      "question_number": 1,
-      "question_text": "Based on your PostgreSQL background, how do you optimize index lookup latency?",
-      "topic": "Database Performance",
-      "difficulty": "Medium",
-      "reason": "Tailored to candidate's PostgreSQL experience.",
-      "retrieved_context": [
-        {
-          "text": "Database indexing utilizes B-Trees...",
-          "source": "databases.md",
-          "role": "backend_engineer",
-          "chunk_index": 0
-        }
-      ]
-    }
-    ```
+
+## Interactive 5-Question Interview Flow
+
+```text
+Resume Upload + Role Selection
+               │
+               ▼
+Candidate Created & Profile Extracted
+               │
+               ▼
+Question 1 Generated (Topic A + RAG Context)
+               │
+               ▼
+Candidate Answer Submitted (POST /api/interview/{session_id}/answer)
+               │
+               ▼
+Next Question Generated (Questions 2 to 5 with Past Q&A Context + Unvisited Topics)
+               │
+               ▼
+Question 5 Answered ──► Session Marked Completed (completed_at set) ──► Completion Screen
+```
+
+### Endpoints
+1. `POST /api/interview/{session_id}/answer`: Validates answer length, prevents duplicate submissions per question, persists `InterviewAnswer` in SQLite, advances `current_question_number`, retrieves RAG context, and returns the next question. Upon answering Question 5, sets `interview_completed: true` and marks session `completed`.
+2. `GET /api/interview/{session_id}`: Returns current session status, question number, active question text, and submission status for session recovery.
+3. `GET /api/interview/{session_id}/questions`: Returns structured history of all generated questions in sequence.
 
 ## Planned Upcoming Modules
 

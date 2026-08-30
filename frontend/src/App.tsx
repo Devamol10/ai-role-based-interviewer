@@ -3,7 +3,7 @@ import {
   checkHealth, 
   uploadResume, 
   generateInterviewQuestion, 
-  type ResumeUploadResult, 
+  submitAnswer,
   type GeneratedQuestionResult 
 } from './services/api';
 
@@ -20,13 +20,17 @@ function App() {
   // Form State
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedRole, setSelectedRole] = useState<string>(SUPPORTED_ROLES[0]);
+  
+  // Loading & Error States
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState<boolean>(false);
+  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // App Workflow State
-  const [, setUploadResult] = useState<ResumeUploadResult | null>(null);
+  // Interactive Interview State
   const [currentQuestion, setCurrentQuestion] = useState<GeneratedQuestionResult | null>(null);
+  const [answerInput, setAnswerInput] = useState<string>('');
+  const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
   const fetchHealth = async () => {
     setHealthStatus('checking');
@@ -70,16 +74,15 @@ function App() {
 
     setIsUploading(true);
     setErrorMessage(null);
-    setUploadResult(null);
     setCurrentQuestion(null);
+    setIsCompleted(false);
 
     try {
-      // Step 1: Upload Resume & Save Candidate
+      // Step 1: Upload Resume & Create Candidate
       const uploadRes = await uploadResume(selectedFile, selectedRole);
-      setUploadResult(uploadRes);
       setIsUploading(false);
 
-      // Step 2: Automatically generate the first question
+      // Step 2: Generate Question 1
       setIsGeneratingQuestion(true);
       const questionRes = await generateInterviewQuestion(uploadRes.candidate_id);
       setCurrentQuestion(questionRes);
@@ -88,6 +91,45 @@ function App() {
     } finally {
       setIsUploading(false);
       setIsGeneratingQuestion(false);
+    }
+  };
+
+  const handleAnswerSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentQuestion) return;
+    
+    const trimmedAnswer = answerInput.trim();
+    if (!trimmedAnswer) {
+      setErrorMessage('Please enter a substantive answer before submitting.');
+      return;
+    }
+    if (trimmedAnswer.length < 5) {
+      setErrorMessage('Your answer is too short. Please elaborate slightly.');
+      return;
+    }
+
+    setIsSubmittingAnswer(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await submitAnswer(
+        currentQuestion.session_id,
+        currentQuestion.id,
+        trimmedAnswer
+      );
+
+      setAnswerInput('');
+
+      if (result.interview_completed) {
+        setIsCompleted(true);
+        setCurrentQuestion(null);
+      } else if (result.next_question) {
+        setCurrentQuestion(result.next_question);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to submit answer.');
+    } finally {
+      setIsSubmittingAnswer(false);
     }
   };
 
@@ -125,7 +167,8 @@ function App() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-6 md:p-8 flex flex-col gap-6">
-        {!currentQuestion ? (
+        {/* State 1: Upload & Initial Setup */}
+        {!currentQuestion && !isCompleted && (
           <>
             {/* Intro */}
             <section className="text-center max-w-2xl mx-auto mt-2">
@@ -133,7 +176,7 @@ function App() {
                 Personalized Technical Interview
               </h2>
               <p className="text-slate-600 text-base leading-relaxed">
-                Upload your resume to extract candidate background and generate RAG-grounded technical interview questions.
+                Upload your resume to start an adaptive 5-question technical interview tailored to your experience and grounded in domain knowledge.
               </p>
             </section>
 
@@ -181,7 +224,7 @@ function App() {
                     ))}
                   </select>
                   <p className="text-xs text-slate-500 mt-2">
-                    Question topic & RAG context will be calibrated specifically for this role.
+                    Question topics & RAG context will be calibrated specifically for this role.
                   </p>
                 </div>
               </div>
@@ -217,7 +260,7 @@ function App() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Querying Knowledge Base & Generating AI Question...
+                    Querying Knowledge Base & Generating Question 1...
                   </>
                 ) : (
                   'Upload Resume & Start Interview'
@@ -225,12 +268,14 @@ function App() {
               </button>
             </form>
           </>
-        ) : (
-          /* Question Display Card */
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8 flex flex-col gap-6">
+        )}
+
+        {/* State 2: Interactive Interview Screen */}
+        {currentQuestion && !isCompleted && (
+          <form onSubmit={handleAnswerSubmit} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 md:p-8 flex flex-col gap-6">
             <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
-                Question {currentQuestion.question_number} / 5
+              <span className="text-xs font-semibold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-full">
+                Question {currentQuestion.question_number} of 5
               </span>
               <div className="flex items-center space-x-3 text-xs text-slate-500">
                 <span>Topic: <strong className="text-slate-800">{currentQuestion.topic}</strong></span>
@@ -250,39 +295,101 @@ function App() {
               )}
             </div>
 
-            {/* Retrieved RAG Context Preview */}
-            {currentQuestion.retrieved_context && currentQuestion.retrieved_context.length > 0 && (
-              <div className="border-t border-slate-100 pt-4">
-                <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                  Retrieved Knowledge Base Context ({currentQuestion.retrieved_context.length} sources)
-                </h4>
-                <div className="space-y-2">
-                  {currentQuestion.retrieved_context.map((ctx, idx) => (
-                    <div key={idx} className="text-xs bg-slate-50 p-3 rounded border border-slate-200 text-slate-700">
-                      <span className="font-mono text-indigo-600 font-semibold block mb-1">[{ctx.source}] Chunk #{ctx.chunk_index}</span>
-                      <p className="line-clamp-2">{ctx.text}</p>
-                    </div>
-                  ))}
-                </div>
+            {/* Answer Textarea */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                Your Answer
+              </label>
+              <textarea
+                rows={5}
+                value={answerInput}
+                onChange={(e) => setAnswerInput(e.target.value)}
+                placeholder="Type your technical answer here in detail..."
+                disabled={isSubmittingAnswer}
+                className="w-full border border-slate-300 rounded-lg p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition disabled:bg-slate-50"
+              />
+            </div>
+
+            {/* Error Banner */}
+            {errorMessage && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 text-sm rounded-lg p-4 flex items-center gap-2">
+                <span className="font-semibold">Error:</span> {errorMessage}
               </div>
             )}
 
+            {/* Submit Answer Controls */}
             <div className="flex items-center justify-between pt-4 border-t border-slate-100">
               <button
+                type="button"
                 onClick={() => {
                   setCurrentQuestion(null);
-                  setUploadResult(null);
                   setSelectedFile(null);
+                  setAnswerInput('');
+                  setErrorMessage(null);
                 }}
                 className="text-xs text-slate-500 hover:text-slate-700 font-medium"
               >
-                &larr; Start New Session
+                Cancel Interview
               </button>
+              <button
+                type="submit"
+                disabled={isSubmittingAnswer || !answerInput.trim()}
+                className={`px-6 py-2.5 rounded-lg font-medium text-sm text-white shadow-sm transition flex items-center gap-2 ${
+                  isSubmittingAnswer || !answerInput.trim()
+                    ? 'bg-slate-300 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800'
+                }`}
+              >
+                {isSubmittingAnswer ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Saving & Generating Next Question...
+                  </>
+                ) : (
+                  'Submit Answer & Next Question \u2192'
+                )}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* State 3: Completion Screen */}
+        {isCompleted && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center flex flex-col items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-2xl mb-2">
+              ✓
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">
+              Interview Completed
+            </h2>
+            <p className="text-slate-600 text-sm max-w-md">
+              Thank you for completing the technical evaluation. All 5 questions have been answered and recorded.
+            </p>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg py-3 px-6 text-xs font-medium text-slate-700">
+              Questions Answered: <strong className="text-slate-900">5 / 5</strong>
+            </div>
+
+            <div className="flex gap-4 mt-4">
               <button
                 disabled
                 className="px-6 py-2.5 bg-slate-200 text-slate-500 font-medium rounded-lg text-sm cursor-not-allowed"
               >
-                Continue (Answer Evaluation Next)
+                View Results (Evaluation coming next)
+              </button>
+              <button
+                onClick={() => {
+                  setIsCompleted(false);
+                  setCurrentQuestion(null);
+                  setSelectedFile(null);
+                  setAnswerInput('');
+                  setErrorMessage(null);
+                }}
+                className="px-6 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium rounded-lg text-sm transition"
+              >
+                Start New Interview
               </button>
             </div>
           </div>
@@ -291,7 +398,7 @@ function App() {
 
       {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-400">
-        AI Role-Based Interviewer &bull; Step 4 AI Question Pipeline
+        AI Role-Based Interviewer &bull; Step 5 Interactive 5-Question Interview
       </footer>
     </div>
   );

@@ -19,7 +19,8 @@ STRICT CONSTRAINTS:
 def generate_interview_question(
     candidate_profile: Dict[str, Any],
     role: str,
-    topic: str
+    topic: str,
+    past_questions_context: List[Dict[str, str]] = None
 ) -> Dict[str, Any]:
     # 1. Build role + candidate + topic retrieval query
     skills_str = ", ".join(candidate_profile.get("skills", []))
@@ -35,6 +36,13 @@ def generate_interview_question(
     )
 
     context_str = "\n\n".join([f"Source ({c['source']}): {c['text']}" for c in retrieved_chunks])
+    
+    past_context_str = ""
+    if past_questions_context:
+        past_items = []
+        for idx, item in enumerate(past_questions_context, 1):
+            past_items.append(f"Q{idx} ({item.get('topic', '')}): {item.get('question', '')}\nAnswer: {item.get('answer', '')}")
+        past_context_str = "\n---\nPreviously Asked Questions & Candidate Answers:\n" + "\n\n".join(past_items)
 
     user_prompt = f"""
 Target Role: {role}
@@ -46,9 +54,10 @@ Candidate Summary: {candidate_profile.get('experience_summary', '')}
 Retrieved Knowledge Base Context:
 ---
 {context_str if context_str else "No additional domain knowledge retrieved."}
----
+---{past_context_str}
 
 Generate ONE personalized interview question based on the topic and grounded in the retrieved context.
+If previous questions are listed, build upon them or probe a deeper applied concept without repeating previous questions.
 
 Return JSON object:
 {{
