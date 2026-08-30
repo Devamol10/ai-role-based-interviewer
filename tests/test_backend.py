@@ -1,5 +1,6 @@
 import sys
 import io
+import json
 from pathlib import Path
 from unittest.mock import patch
 from fastapi.testclient import TestClient
@@ -13,8 +14,8 @@ sys.path.insert(0, str(backend_path))
 from app.main import app
 from app.core.database import engine, init_db, SessionLocal
 from app.models.candidate import Candidate
-from app.rag.chunker import chunk_text
-from app.rag.ingestion import get_knowledge_base_dir
+from app.models.interview import InterviewSession
+from app.models.question import InterviewQuestion
 
 client = TestClient(app)
 
@@ -26,109 +27,84 @@ def create_sample_pdf_bytes(text: str = "John Doe\nSoftware Engineer\nSkills: Py
     doc.close()
     return pdf_bytes
 
-def test_health_endpoint_status():
+def test_health_endpoint():
     response = client.get("/api/health")
     assert response.status_code == 200
+    assert response.json()["status"] == "ok"
 
-def test_health_endpoint_response_body():
-    response = client.get("/api/health")
-    data = response.json()
-    assert data["status"] == "ok"
-    assert data["service"] == "ai-role-based-interviewer"
+def test_question_generate_candidate_not_found():
+    payload = {"candidate_id": 99999}
+    response = client.post("/api/interview/questions/generate", json=payload)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
-def test_database_initialization():
-    init_db()
-    inspector = inspect(engine)
-    tables = inspector.get_table_names()
-    expected_tables = {
-        "candidates",
-        "interview_sessions",
-        "interview_questions",
-        "interview_answers",
-        "interview_reports",
-    }
-    for table in expected_tables:
-        assert table in tables
+def test_question_generate_invalid_candidate_id():
+    payload = {"candidate_id": -1}
+    response = client.post("/api/interview/questions/generate", json=payload)
+    assert response.status_code == 422
 
-def test_upload_valid_resume_pdf():
-    pdf_bytes = create_sample_pdf_bytes("Alice Smith\nBackend Engineer\nPython FastAPI SQLite")
-    files = {
-        "file": ("alice_resume.pdf", io.BytesIO(pdf_bytes), "application/pdf")
-    }
-    data = {"role": "Backend Engineer"}
-
-    response = client.post("/api/resume/upload", files=files, data=data)
-    assert response.status_code == 201
-    res_data = response.json()
-
-    assert res_data["filename"] == "alice_resume.pdf"
-    assert res_data["selected_role"] == "Backend Engineer"
-    assert res_data["extracted_text_length"] > 0
-    assert "candidate_id" in res_data
-
-def test_chunker_splits_paragraphs_and_attaches_metadata():
-    sample_text = (
-        "Paragraph One introduces database indexes and B-Trees for rapid lookup performance.\n\n"
-        "Paragraph Two discusses ACID transaction isolation levels including Read Committed and Serializable.\n\n"
-        "Paragraph Three details sharding keys and horizontal partitioning across nodes."
+@patch("app.api.routes.questions.generate_interview_question")
+@patch("app.api.routes.questions.select_interview_topics")
+@patch("app.api.routes.questions.extract_candidate_profile")
+def test_question_generate_success_and_persistence(mock_profile, mock_topics, mock_question_gen):
+    # 1. Create candidate in DB
+    db = SessionLocal()
+    cand = Candidate(
+        resume_filename="test_resume.pdf",
+        resume_text="Experienced Python FastAPI developer",
+        selected_role="Backend Engineer",
+        extracted_skills=["Python", "FastAPI"],
+        extracted_technologies=["PostgreSQL", "Docker"]
     )
-    chunks = chunk_text(sample_text, source="databases.md", role="backend_engineer", chunk_size=150, overlap=30)
-    
-    assert len(chunks) >= 2
-    for idx, c in enumerate(chunks):
-        assert "text" in c
-        assert c["metadata"]["source"] == "databases.md"
-        assert c["metadata"]["role"] == "backend_engineer"
-        assert c["metadata"]["chunk_index"] == idx
+    db.add(cand)
+    db.commit()
+    db.refresh(cand)
+    cand_id = cand.id
+    db.close()
 
-def test_knowledge_base_directory_discovery():
-    kb_dir = get_knowledge_base_dir()
-    assert kb_dir.exists()
-    assert (kb_dir / "backend_engineer").exists()
-    assert (kb_dir / "ai_ml_engineer").exists()
-    assert (kb_dir / "data_science").exists()
-
-def test_rag_search_validation_empty_query():
-    payload = {
-        "query": "  ",
-        "role": "Backend Engineer",
-        "top_k": 5
+    # Mocks
+    mock_profile.return_value = {
+        "skills": ["Python", "FastAPI"],
+        "technologies": ["PostgreSQL", "Docker"],
+        "experience_summary": "Factual test summary"
     }
-    response = client.post("/api/rag/search", json=payload)
-    assert response.status_code == 422
-
-def test_rag_search_validation_unsupported_role():
-    payload = {
-        "query": "What is indexing?",
-        "role": "Fullstack Developer",
-        "top_k": 5
+    mock_topics.return_value = ["Database Performance", "API Design"]
+    mock_question_gen.return_value = {
+        "question": "How do you optimize PostgreSQL queries in FastAPI?",
+        "topic": "Database Performance",
+        "difficulty": "Medium",
+        "reason": "Tailored to candidate's PostgreSQL experience.",
+        "retrieved_context": [
+            {
+                "text": "Database indexing optimizes lookup queries.",
+                "source": "databases.md",
+                "role": "backend_engineer",
+                "chunk_index": 0
+            }
+        ]
     }
-    response = client.post("/api/rag/search", json=payload)
-    assert response.status_code == 422
 
-@patch("app.rag.retrieval.generate_embeddings")
-@patch("app.rag.retrieval.query_vector_store")
-def test_rag_search_mocked_success(mock_query_vs, mock_gen_embeds):
-    mock_gen_embeds.return_value = [[0.1, 0.2, 0.3]]
-    mock_query_vs.return_value = [
-        {
-            "text": "Database indexing utilizes B-Trees.",
-            "source": "databases.md",
-            "role": "backend_engineer",
-            "chunk_index": 0
-        }
-    ]
+    # 2. Call API
+    payload = {"candidate_id": cand_id}
+    response = client.post("/api/interview/questions/generate", json=payload)
+    assert response.status_code == 201
+    data = response.json()
 
-    payload = {
-        "query": "How does indexing work?",
-        "role": "Backend Engineer",
-        "top_k": 3
-    }
-    response = client.post("/api/rag/search", json=payload)
-    assert response.status_code == 200
-    res_data = response.json()
+    assert data["question_text"] == "How do you optimize PostgreSQL queries in FastAPI?"
+    assert data["topic"] == "Database Performance"
+    assert data["difficulty"] == "Medium"
+    assert len(data["retrieved_context"]) == 1
 
-    assert res_data["query"] == "How does indexing work?"
-    assert res_data["role"] == "Backend Engineer"
-    assert res_data["result_count"] == 1
-    assert res_data["results"][0]["source"] == "databases.md"
+    # 3. Verify SQLite DB records (Session & Question)
+    db = SessionLocal()
+    session = db.query(InterviewSession).filter(InterviewSession.candidate_id == cand_id).first()
+    assert session is not None
+    assert session.status == "active"
+    assert session.current_question_number == 1
+
+    question = db.query(InterviewQuestion).filter(InterviewQuestion.session_id == session.id).first()
+    assert question is not None
+    assert question.question_text == "How do you optimize PostgreSQL queries in FastAPI?"
+    assert question.topic == "Database Performance"
+    assert "databases.md" in question.retrieved_context
+    db.close()

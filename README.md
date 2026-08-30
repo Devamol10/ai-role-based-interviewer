@@ -198,6 +198,57 @@ python scripts/ingest_knowledge_base.py
   }
   ```
 
+## AI Question Generation Pipeline
+
+The system converts raw candidate resumes and target roles into personalized, knowledge-grounded technical interview questions:
+
+```text
+Resume Text
+     │
+     ▼
+Candidate Profile Extraction (app/services/candidate_profile_service.py)
+     │
+     ▼
+Topic Selection (app/services/topic_service.py)
+     │
+     ▼
+RAG Vector Retrieval (app/rag/retrieval.py)
+     │
+     ▼
+LLM Question Generation (app/services/question_generation_service.py)
+     │
+     ▼
+SQLite Persistence (InterviewSession & InterviewQuestion)
+```
+
+### Key Components:
+- **Profile Extraction**: Extracts factual skills and technologies from resumes without hallucinating non-existent candidate experience.
+- **Topic Selection**: Selects 3-5 relevant interview topics grounded in candidate skills and role demands.
+- **RAG Grounding**: Combines role, candidate skills, and topic into vector queries to retrieve up to 3 domain-specific chunks from ChromaDB.
+- **Question Generation**: OpenAI `gpt-4o-mini` crafts structured single questions tailored to candidate background and grounded in retrieved context.
+- **API Endpoint (`POST /api/interview/questions/generate`)**:
+  - Request: `{"candidate_id": 1, "topic": "Database Performance"}`
+  - Response:
+    ```json
+    {
+      "id": 1,
+      "session_id": 1,
+      "question_number": 1,
+      "question_text": "Based on your PostgreSQL background, how do you optimize index lookup latency?",
+      "topic": "Database Performance",
+      "difficulty": "Medium",
+      "reason": "Tailored to candidate's PostgreSQL experience.",
+      "retrieved_context": [
+        {
+          "text": "Database indexing utilizes B-Trees...",
+          "source": "databases.md",
+          "role": "backend_engineer",
+          "chunk_index": 0
+        }
+      ]
+    }
+    ```
+
 ## Planned Upcoming Modules
 
 1. **Resume Ingestion & Parsing**: Extract text & structure from candidate PDF resumes (PyMuPDF).

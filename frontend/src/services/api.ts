@@ -27,12 +27,37 @@ export interface RAGSearchResponse {
   results: RAGChunkResult[];
 }
 
+export interface GeneratedQuestionResult {
+  id: number;
+  session_id: number;
+  question_number: number;
+  question_text: string;
+  topic: string;
+  difficulty: string;
+  reason: string;
+  retrieved_context: RAGChunkResult[];
+}
+
 export async function checkHealth(): Promise<HealthResponse> {
   const response = await fetch(`${API_BASE_URL}/api/health`);
   if (!response.ok) {
     throw new Error(`Health check failed with status: ${response.status}`);
   }
   return response.json();
+}
+
+export async function generateInterviewQuestion(candidateId: number, topic?: string): Promise<GeneratedQuestionResult> {
+  const response = await fetch(`${API_BASE_URL}/api/interview/questions/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ candidate_id: candidateId, topic }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    const errorMsg = data.detail || data.message || 'Failed to generate interview question.';
+    throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+  }
+  return data as GeneratedQuestionResult;
 }
 
 export async function searchRAG(query: string, role: string, topK: number = 5): Promise<RAGSearchResponse> {
