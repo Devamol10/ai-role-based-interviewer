@@ -35,6 +35,13 @@ def generate_interview_question(
         top_k=3
     )
 
+    if not retrieved_chunks:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No knowledge base context found for role '{role}' and topic '{topic}'. Please ensure knowledge base ingestion has been executed."
+        )
+
     context_str = "\n\n".join([f"Source ({c['source']}): {c['text']}" for c in retrieved_chunks])
     
     past_context_str = ""

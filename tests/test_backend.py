@@ -163,7 +163,7 @@ def test_full_5_question_flow_and_report(mock_summary, mock_eval, mock_topics, m
         "topic": topic,
         "difficulty": "Medium",
         "reason": f"Testing {topic}",
-        "retrieved_context": []
+        "retrieved_context": [{"source": "databases.md", "text": "Sample ground context.", "role": role, "chunk_index": 0}]
     }
     mock_eval.side_effect = lambda question_text, answer_text, role, topic, retrieved_context: {
         "score": 8.0,
