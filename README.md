@@ -1,5 +1,7 @@
 # AI Role-Based Interviewer
 
+**Repository:** https://github.com/Devamol10/ai-role-based-interviewer
+
 AI Role-Based Interviewer is an intelligent technical interview platform designed to conduct role-based technical interviews for engineering candidates using candidate resumes and domain knowledge bases.
 
 ## Architecture Overview
